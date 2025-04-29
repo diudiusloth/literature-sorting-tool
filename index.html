@@ -78,6 +78,13 @@
         margin-bottom: 15px;
         font-weight: 500;
       }
+      .references-container {
+        /* max-height: 400px; */
+        overflow-y: auto;
+        border: 1px solid #eaeaea;
+        border-radius: 8px;
+        padding: 10px;
+      }
       .reference-item {
         background-color: #f9f9f9;
         border: 1px solid #e2e8f0;
@@ -87,8 +94,10 @@
         cursor: grab;
         display: flex;
         align-items: center;
-        animation: fadeIn 0.3s ease;
         transition: transform 0.15s, box-shadow 0.15s;
+      }
+      .reference-item:last-child {
+        margin-bottom: 0;
       }
       .reference-item:hover {
         background-color: #f0f7ff;
@@ -131,10 +140,7 @@
         flex-wrap: wrap;
         gap: 12px;
       }
-      .copy-button {
-        background-color: #4a89dc;
-        color: white;
-        border: none;
+      .button {
         padding: 12px 20px;
         border-radius: 8px;
         cursor: pointer;
@@ -143,14 +149,26 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        transition: background-color 0.2s;
+        transition: all 0.2s;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border: none;
+      }
+      .button:active {
+        transform: translateY(1px);
+      }
+      .copy-button {
+        background-color: #4a89dc;
+        color: white;
       }
       .copy-button:hover {
         background-color: #3a70c0;
       }
-      .copy-button:active {
-        transform: translateY(1px);
+      .clear-button {
+        background-color: #dc3545;
+        color: white;
+      }
+      .clear-button:hover {
+        background-color: #c82333;
       }
       .sortable-chosen {
         background-color: #e2e9ff;
@@ -192,6 +210,9 @@
         font-size: 14px;
         color: #666;
       }
+      .reference-item {
+        animation: none;
+      }
     </style>
   </head>
   <body>
@@ -218,11 +239,13 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
 
       <div class="references-list">
         <h2>文献列表（拖动排序）</h2>
-        <div id="referencesList" class="sortable-list"></div>
+        <div class="references-container">
+          <div id="referencesList" class="sortable-list"></div>
+        </div>
       </div>
 
       <div class="button-group">
-        <button id="copyBtn" class="copy-button">
+        <button id="copyBtn" class="button copy-button">
           <svg
             width="16"
             height="16"
@@ -240,6 +263,24 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
           </svg>
           复制格式化文献
         </button>
+        <button id="clearBtn" class="button clear-button">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+            ></path>
+          </svg>
+          清空所有文献
+        </button>
       </div>
     </div>
 
@@ -247,6 +288,7 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
       document.addEventListener("DOMContentLoaded", function () {
         const inputText = document.getElementById("inputText");
         const copyBtn = document.getElementById("copyBtn");
+        const clearBtn = document.getElementById("clearBtn");
         const messageEl = document.getElementById("message");
         const referencesList = document.getElementById("referencesList");
 
@@ -257,26 +299,49 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
         initSortable();
 
         function initSortable() {
+          if (sortable) {
+            sortable.destroy(); // 销毁之前的实例
+          }
+
           sortable = new Sortable(referencesList, {
             animation: 150,
             ghostClass: "sortable-ghost",
             chosenClass: "sortable-chosen",
             dragClass: "sortable-drag",
+            scrollSensitivity: 50, // 降低滚动敏感度，使滚动更容易触发
+            scrollSpeed: 32, // 增加滚动速度
+            scroll: true, // 允许容器滚动
+            forceAutoScrollFallback: true, // 强制使用自动滚动回退
+            fallbackOnBody: true, // 在整个页面上启用滚动
+            fallbackTolerance: 0, // 降低拖动容差，使滚动更敏感
+            handle: ".reference-item", // 只通过条目本身拖动，不通过删除按钮
             onEnd: function () {
               // 更新数据顺序
               const items = referencesList.querySelectorAll(".reference-item");
               const newReferences = [];
               items.forEach((item) => {
-                const index = item.dataset.index;
-                if (index !== undefined) {
-                  newReferences.push(references[parseInt(index)]);
+                const index = parseInt(item.dataset.index);
+                if (!isNaN(index)) {
+                  newReferences.push(references[index]);
                 }
               });
               references = newReferences;
 
-              // 重新渲染以更新编号
-              renderReferences();
+              // 更新引用编号，但不完全重新渲染
+              updateReferenceNumbers();
             },
+          });
+        }
+
+        // 只更新引用编号，不重新渲染整个列表
+        function updateReferenceNumbers() {
+          const items = referencesList.querySelectorAll(".reference-item");
+          items.forEach((item, idx) => {
+            const numberEl = item.querySelector(".reference-number");
+            if (numberEl) {
+              numberEl.textContent = `[${idx + 1}]`;
+            }
+            item.dataset.index = idx;
           });
         }
 
@@ -291,6 +356,20 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
         // 监听粘贴事件，立即处理
         inputText.addEventListener("paste", function () {
           setTimeout(processText, 100); // 短暂延迟，确保内容已粘贴
+        });
+
+        // 清空所有文献
+        clearBtn.addEventListener("click", function () {
+          if (references.length === 0) {
+            showMessage("列表已经是空的", "warning");
+            return;
+          }
+
+          if (confirm("确定要删除所有文献引用吗？")) {
+            references = [];
+            renderReferences();
+            showMessage("已清空所有文献引用", "success");
+          }
         });
 
         // 处理文本
@@ -330,11 +409,64 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
 
           // 如果有新增的引用，显示消息并更新显示
           if (newRefs.length > 0) {
-            renderReferences();
+            // 只添加新的引用条目，而不是重新渲染整个列表
+            appendNewReferences(newRefs);
             showMessage(`成功添加 ${newRefs.length} 条文献引用`, "success");
           } else if (parsedRefs.length > 0) {
             showMessage(`所有文献引用都已存在，未添加新条目`, "warning");
           }
+        }
+
+        // 只添加新的引用条目
+        function appendNewReferences(newRefs) {
+          // 如果是第一个引用，清空空提示
+          if (references.length === newRefs.length) {
+            referencesList.innerHTML = "";
+          }
+
+          const startIndex = references.length - newRefs.length;
+
+          newRefs.forEach((ref, idx) => {
+            const currentIndex = startIndex + idx;
+            const item = createReferenceItem(ref, currentIndex);
+            referencesList.appendChild(item);
+          });
+        }
+
+        // 创建单个引用条目
+        function createReferenceItem(ref, index) {
+          const item = document.createElement("div");
+          item.className = "reference-item";
+          item.dataset.index = index;
+
+          const number = document.createElement("div");
+          number.className = "reference-number";
+          number.textContent = `[${index + 1}]`;
+
+          const content = document.createElement("div");
+          content.className = "reference-content";
+          content.textContent = ref;
+
+          const deleteBtn = document.createElement("div");
+          deleteBtn.className = "delete-button";
+          deleteBtn.innerHTML = "×";
+          deleteBtn.addEventListener("click", function (e) {
+            e.stopPropagation(); // 防止事件冒泡
+            deleteReference(index);
+          });
+
+          item.appendChild(number);
+          item.appendChild(content);
+          item.appendChild(deleteBtn);
+
+          return item;
+        }
+
+        // 删除单个引用
+        function deleteReference(index) {
+          references.splice(index, 1);
+          renderReferences(); // 这里需要完整重新渲染，因为索引发生了变化
+          showMessage("文献已删除", "success");
         }
 
         // 比较两个引用是否相似（去除空格和标点符号后比较）
@@ -358,32 +490,7 @@ diudiu, 玛丽·猫薄荷. 《尾巴摆动频率与股市波动率的非线性�
           }
 
           references.forEach((ref, index) => {
-            const item = document.createElement("div");
-            item.className = "reference-item";
-            item.dataset.index = index;
-
-            const number = document.createElement("div");
-            number.className = "reference-number";
-            number.textContent = `[${index + 1}]`;
-
-            const content = document.createElement("div");
-            content.className = "reference-content";
-            content.textContent = ref;
-
-            const deleteBtn = document.createElement("div");
-            deleteBtn.className = "delete-button";
-            deleteBtn.innerHTML = "×";
-            deleteBtn.addEventListener("click", function (e) {
-              e.stopPropagation();
-              references.splice(index, 1);
-              renderReferences();
-              showMessage("文献已删除", "success");
-            });
-
-            item.appendChild(number);
-            item.appendChild(content);
-            item.appendChild(deleteBtn);
-
+            const item = createReferenceItem(ref, index);
             referencesList.appendChild(item);
           });
 
